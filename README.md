@@ -43,7 +43,12 @@ View Code
 </summary>
 
 ``` r
-df = read_csv("data/masters_data_2021.csv", show_col_types = F)
+# changing player name to be (first + last) instead of (last, first)
+df = read_csv("data/masters_data_2021.csv", show_col_types = F) |>
+  separate(player_name, into = c("last_name", "first_name"), sep = ",") |>
+  mutate(player_name = paste(first_name, last_name)) |>
+  select(1:5, 31, 8:30)
+
 paste0("Data dimensions: ", nrow(df), " rows, ", ncol(df), " columns")
 ```
 
@@ -87,8 +92,8 @@ min_max_rounds |>
 
 **Plot Notes**
 
-- Francesco Molinari shot 81 in round 4 and 69 in round 3
 - Bernd Wiesberger shot 78 in round 4 and 66 in round 2
+- Francesco Molinari shot 81 in round 4 and 69 in round 3
 - Carlos Ortiz shot 82 in round 1 and 71 in round 2 (missed cut)
 - Joe Long shot 82 in round 1 and 72 in round 2 (missed cut)
 - Hudson Swafford shot 83 in round 2 and 73 in round 1 (missed cut)
@@ -233,3 +238,37 @@ the number of poor shots a player hit. In the plot, the dashed line
 represents the points where the number of great shots is equal to the
 number of poor shots a player hit - ideally, players want to be below
 this line, indicating they hit more great shots than poor shots.
+
+------------------------------------------------------------------------
+
+### Great Shots v Poor Shots
+
+Which players had the biggest difference in great and poor shots, in
+either direction?
+
+``` r
+n_threshold = 6
+
+df |>
+  filter(!is.na(great_shots) & !is.na(poor_shots)) |>
+  group_by(player_name) |>
+  summarise(great = sum(great_shots),
+            poor = sum(poor_shots)) |>
+  mutate(diff = great - poor) |>
+  slice_max(diff, n = n_threshold) |>
+  rbind(df |>
+  filter(!is.na(great_shots) & !is.na(poor_shots)) |>
+  group_by(player_name) |>
+  summarise(great = sum(great_shots),
+            poor = sum(poor_shots)) |>
+  mutate(diff = great - poor) |>
+  slice_min(diff, n = n_threshold)) |>
+  mutate(diff_col = ifelse(diff > 0, "good", "bad")) |>
+  ggplot(aes(reorder(player_name, diff), diff)) +
+  geom_col(aes(fill = diff_col), show.legend = F) +
+  coord_flip() +
+  scale_fill_manual(values = c(custom_red, custom_green)) +
+  labs(title = "THIS ONE IS STILL IN PROGRESS")
+```
+
+![](README_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
