@@ -117,10 +117,12 @@ View Code
 
 df |>
   filter(!is.na(great_shots)) |>
-  group_by(player_name) |>
-  summarise(great_shots = sum(great_shots)) |>
+  group_by(player_name, fin_text) |>
+  summarise(great_shots = sum(great_shots),
+            .groups = "drop") |>
   slice_max(great_shots, n = 10) |>
-  ggplot(aes(reorder(player_name, great_shots), great_shots)) +
+  mutate(p_name = paste0(player_name, " (", fin_text, ")")) |>
+  ggplot(aes(reorder(p_name, great_shots), great_shots)) +
   geom_col(fill = custom_green) +
   geom_text(aes(label = great_shots), size = 3.5, hjust = -0.4) +
   coord_flip() +
@@ -158,10 +160,12 @@ View Code
 
 df |>
   filter(!is.na(poor_shots)) |>
-  group_by(player_name) |>
-  summarise(poor_shots = sum(poor_shots)) |>
+  group_by(player_name, fin_text) |>
+  summarise(poor_shots = sum(poor_shots),
+            .groups = "drop") |>
   slice_max(poor_shots, n = 10) |>
-  ggplot(aes(reorder(player_name, poor_shots), poor_shots)) +
+  mutate(p_name = paste0(player_name, " (", fin_text, ")")) |>
+  ggplot(aes(reorder(p_name, poor_shots), poor_shots)) +
   geom_col(fill = custom_red) +
   geom_text(aes(label = poor_shots), size = 3.5, hjust = -0.4) +
   coord_flip() +
@@ -246,29 +250,127 @@ this line, indicating they hit more great shots than poor shots.
 Which players had the biggest difference in great and poor shots, in
 either direction?
 
+<details>
+<summary>
+View Code
+</summary>
+
 ``` r
 n_threshold = 6
 
 df |>
   filter(!is.na(great_shots) & !is.na(poor_shots)) |>
-  group_by(player_name) |>
+  group_by(player_name, fin_text) |>
   summarise(great = sum(great_shots),
-            poor = sum(poor_shots)) |>
+            poor = sum(poor_shots),
+            .groups = "drop") |>
   mutate(diff = great - poor) |>
   slice_max(diff, n = n_threshold) |>
   rbind(df |>
   filter(!is.na(great_shots) & !is.na(poor_shots)) |>
-  group_by(player_name) |>
+  group_by(player_name, fin_text) |>
   summarise(great = sum(great_shots),
-            poor = sum(poor_shots)) |>
+            poor = sum(poor_shots),
+            .groups = "drop") |>
   mutate(diff = great - poor) |>
   slice_min(diff, n = n_threshold)) |>
-  mutate(diff_col = ifelse(diff > 0, "good", "bad")) |>
-  ggplot(aes(reorder(player_name, diff), diff)) +
+  mutate(diff_col = ifelse(diff > 0, "good", "bad"),
+         pos_lab = ifelse(diff > 0, diff, ""),
+         neg_lab = ifelse(diff < 0, diff, ""),
+         p_name = paste0(player_name, " (", fin_text, ")")) |>
+  ggplot(aes(reorder(p_name, diff), diff)) +
   geom_col(aes(fill = diff_col), show.legend = F) +
+  geom_text(aes(label = pos_lab), size = 3.5, hjust = 1.5) +
+  geom_text(aes(label = neg_lab), size = 3.5, hjust = -0.4) +
   coord_flip() +
   scale_fill_manual(values = c(custom_red, custom_green)) +
-  labs(title = "THIS ONE IS STILL IN PROGRESS")
+  labs(x = NULL, y = "Great Shots - Poor Shots",
+       title = "Biggest Differences Between Great and Poor Shots",
+       subtitle = "2021 Masters Tournament") +
+  scale_y_continuous(breaks = seq(-15, 15, by = 3))
 ```
 
+</details>
+
 ![](README_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+
+------------------------------------------------------------------------
+
+### Impactful Shots by Round
+
+<details>
+<summary>
+View Code
+</summary>
+
+``` r
+df |>
+  filter(!is.na(great_shots) & !is.na(poor_shots) & !is.na(round_score)) |>
+  inner_join(df |>
+  filter(!is.na(great_shots) & !is.na(poor_shots) & !is.na(round_score)) |>
+  group_by(player_name, round_num) |>
+  summarise(great = sum(great_shots),
+            poor = sum(poor_shots),
+            impactful = sum(great_shots) + sum(poor_shots),
+            .groups = "drop"), by = c("player_name", "round_num")) |>
+  mutate(great_prop = great / impactful,
+         round_num = paste0("Round ", round_num)) |>
+  ggplot(aes(impactful, round_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm", se = F, col = "springgreen4") +
+  geom_hline(yintercept = 72, alpha = 0.15) +
+  facet_wrap(vars(round_num)) +
+  labs(x = "Impactful Shots", y = "Round Score",
+       title = "Impactful Shots by Round",
+       subtitle = "2021 Masters Tournament") +
+  scale_x_continuous(breaks = seq(0, 20, by = 2)) +
+  scale_y_continuous(breaks = seq(60, 90, by = 4))
+```
+
+</details>
+
+![](README_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+**Plot Note**: I am defining an impactful shot as one that has either a
+great or poor outcome (as determined by the data source). One way of
+interpreting this may also be considering these as high-risk shots -
+shots that are risky and can either turn out great or turn out poorly.
+This may not necessarily be the case for each great or poor shot, but is
+how I am tracking it with the data at hand. With this interpretation,
+round three is called moving day for a reason - it is the only round
+where the number of impactful shots has a negative relationship with
+that player’s score. The relationship is also notably more positive in
+rounds two and four, which I suspect may be due to course setup or some
+players hitting higher-risk shots in attempt to make the cut or improve
+their finishing position.
+
+------------------------------------------------------------------------
+
+### Scoring by Round and Time of Day (IN PROGRESS)
+
+``` r
+df |>
+  inner_join(df |>
+  distinct(round_num, teetime) |>
+  group_by(round_num) |>
+  mutate(round_group_num = rank(teetime)) |>
+  arrange(round_num, teetime), by = c("round_num", "teetime")) |>
+  group_by(round_num, teetime) |>
+  summarise(round_score = sum(round_score),
+            .groups = "drop")
+```
+
+    ## # A tibble: 114 × 3
+    ##    round_num teetime round_score
+    ##        <dbl> <time>        <dbl>
+    ##  1         1 08:00           145
+    ##  2         1 08:12           231
+    ##  3         1 08:24           226
+    ##  4         1 08:36           222
+    ##  5         1 08:48           226
+    ##  6         1 09:00           216
+    ##  7         1 09:12           218
+    ##  8         1 09:24           223
+    ##  9         1 09:36           225
+    ## 10         1 09:48           218
+    ## # ℹ 104 more rows
