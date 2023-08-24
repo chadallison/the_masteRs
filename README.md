@@ -346,31 +346,66 @@ their finishing position.
 
 ------------------------------------------------------------------------
 
-### Scoring by Round and Time of Day (IN PROGRESS)
+### Scoring by Round and Time of Day
+
+<details>
+<summary>
+View Code
+</summary>
 
 ``` r
 df |>
   inner_join(df |>
   distinct(round_num, teetime) |>
   group_by(round_num) |>
-  mutate(round_group_num = rank(teetime)) |>
-  arrange(round_num, teetime), by = c("round_num", "teetime")) |>
+  mutate(round_group_num = rank(teetime)), by = c("round_num", "teetime")) |>
   group_by(round_num, teetime) |>
-  summarise(round_score = sum(round_score),
-            .groups = "drop")
+  summarise(score = sum(round_score),
+            .groups = "drop") |>
+  inner_join(df |>
+  group_by(round_num, teetime) |>
+  summarise(n_players = n(),
+            .groups = "drop"), by = c("round_num", "teetime")) |>
+  mutate(avg_score = round(score / n_players, 3),
+         round_num = paste0("Round ", round_num)) |>
+  ggplot(aes(teetime, avg_score)) +
+  geom_line(linewidth = 1.5, col = custom_green) +
+  geom_line(stat = "smooth", formula = y ~ x, method = "lm", alpha = 0.5) +
+  facet_wrap(vars(round_num)) +
+  scale_y_continuous(breaks = seq(60, 90, by = 2)) +
+  labs(x = "Tee Time", y = "Group Average Score",
+       title = "Scores by Tee Times",
+       subtitle = "2021 Masters Tournament")
 ```
 
-    ## # A tibble: 114 × 3
-    ##    round_num teetime round_score
-    ##        <dbl> <time>        <dbl>
-    ##  1         1 08:00           145
-    ##  2         1 08:12           231
-    ##  3         1 08:24           226
-    ##  4         1 08:36           222
-    ##  5         1 08:48           226
-    ##  6         1 09:00           216
-    ##  7         1 09:12           218
-    ##  8         1 09:24           223
-    ##  9         1 09:36           225
-    ## 10         1 09:48           218
-    ## # ℹ 104 more rows
+</details>
+
+![](README_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+**Plot Note**: I’m not sure there’s much to be seen here, as scores
+appear to vary throughout the day for all four rounds. The only thing I
+find potentially interesting is that for rounds three and four, the
+highest scores appear to directly follow the lowest scores for the day.
+For round two, the same is nearly true, but the lowest scores occur well
+after the highest scores for the day. I don’t make much of it.
+
+------------------------------------------------------------------------
+
+### Driving Stuff (IN PROGRESS)
+
+``` r
+df |>
+  filter(!is.na(driving_dist) & !is.na(driving_acc)) |>
+  mutate(round_num = paste0("Round ", round_num)) |>
+  ggplot(aes(driving_dist, driving_acc)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm", se = F, col = custom_red) +
+  facet_wrap(vars(round_num), scales = "free_x") +
+  labs(x = "Driving Distance", y = "Driving Accuracy",
+       title = "Driving Accuracy by Distance",
+       subtitle = "2021 Masters Tournament") +
+  scale_x_continuous(breaks = seq(200, 400, by = 10)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1), labels = scales::percent)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
