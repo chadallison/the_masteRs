@@ -391,9 +391,34 @@ after the highest scores for the day. I don’t make much of it.
 
 ------------------------------------------------------------------------
 
-### Driving Stuff (IN PROGRESS)
+### Driving Accuracy by Distance
+
+<details>
+<summary>
+View Code
+</summary>
 
 ``` r
+# cor_df = df |>
+#   filter(!is.na(driving_dist) & !is.na(driving_acc) & round_num == 1)
+# 
+# round(cor(cor_df$driving_dist, cor_df$driving_acc), 3)
+# 
+# cor_df = df |>
+#   filter(!is.na(driving_dist) & !is.na(driving_acc) & round_num == 2)
+# 
+# round(cor(cor_df$driving_dist, cor_df$driving_acc), 3)
+# 
+# cor_df = df |>
+#   filter(!is.na(driving_dist) & !is.na(driving_acc) & round_num == 3)
+# 
+# round(cor(cor_df$driving_dist, cor_df$driving_acc), 3)
+# 
+# cor_df = df |>
+#   filter(!is.na(driving_dist) & !is.na(driving_acc) & round_num == 4)
+# 
+# round(cor(cor_df$driving_dist, cor_df$driving_acc), 3)
+
 df |>
   filter(!is.na(driving_dist) & !is.na(driving_acc)) |>
   mutate(round_num = paste0("Round ", round_num)) |>
@@ -408,4 +433,151 @@ df |>
   scale_y_continuous(breaks = seq(0, 1, by = 0.1), labels = scales::percent)
 ```
 
+</details>
+
 ![](README_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+
+**Plot Notes**: As we would likely expect, there is a negative
+relationship between driving distance and driving accuracy. The
+correlation coefficient between the two by round was pretty consistent
+over the weekend, going -0.288, -0.261, -0.241, and -0.249 in rounds one
+through four respectively. This is not necessarily that strong of a
+correlation, but I find it interesting how consistent the coefficient is
+over the weekend.
+
+------------------------------------------------------------------------
+
+``` r
+# cor_df = df |>
+#   select(sg_ott, driving_dist, driving_acc) |>
+#   na.omit()
+# 
+# acc_cor = round(cor(cor_df$driving_acc, cor_df$sg_ott), 3)
+# dist_cor = round(cor(cor_df$driving_dist, cor_df$sg_ott), 3)
+
+df |>
+  select(sg_ott, driving_dist, driving_acc) |>
+  na.omit() |>
+  pivot_longer(!sg_ott, names_to = "driving_metric", values_to = "value") |>
+  mutate(driving_metric = ifelse(driving_metric == "driving_dist", "Driving Distance", "Driving Accuracy")) |>
+  ggplot(aes(value, sg_ott)) +
+  geom_point(col = custom_green) +
+  geom_line(stat = "smooth", formula = y ~ x, method = "lm", linetype = "dashed") +
+  geom_hline(yintercept = 0, alpha = 0.25) +
+  facet_wrap(vars(driving_metric), scales = "free_x") +
+  labs(x = "Metric Value", y = "Strokes Gained Off the Tee",
+       title = "Strokes Gained Off the Tee",
+       subtitle = "2021 Masters Tournament") +
+  scale_y_continuous(breaks = seq(-5, 5, by = 1))
+```
+
+![](README_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+
+**Plot Note**: Both driving accuracy and distance have a positive
+correlation with strokes gained off the tee, with driving accuracy
+having a correlation coefficient of 0.534 and driving distance having a
+correlation of 0.443. Extra distance is nice, but keeping the ball in
+the fairway looks to have been more important during this weekend at
+Augusta.
+
+------------------------------------------------------------------------
+
+### Strokes Gained Metrics
+
+<details>
+<summary>
+View Code
+</summary>
+
+``` r
+# cor_mat = df |>
+#   select(contains("sg_")) |>
+#   na.omit() |>
+#   cor() |>
+#   round(3)
+# 
+# cor_mat[1, 6]
+# cor_mat[2, 6]
+# cor_mat[3, 6]
+# cor_mat[4, 6]
+# cor_mat[5, 6]
+
+df |>
+  select(contains("sg_")) |>
+  na.omit() |>
+  pivot_longer(!sg_total, names_to = "sg_metric", values_to = "value") |>
+  mutate(sg_metric = case_when(sg_metric == "sg_putt" ~ "Strokes Gained (Putting)",
+                               sg_metric == "sg_arg" ~ "Strokes Gained (Around the Green)",
+                               sg_metric == "sg_app" ~ "Strokes Gained (Approach)",
+                               sg_metric == "sg_ott" ~ "Strokes Gained (Off the Tee)",
+                               sg_metric == "sg_t2g" ~ "Strokes Gained (Tee to Green)"),
+         sg_metric = factor(sg_metric, levels = c(
+           "Strokes Gained (Off the Tee)", "Strokes Gained (Approach)", "Strokes Gained (Around the Green)",
+           "Strokes Gained (Tee to Green)", "Strokes Gained (Putting)"))) |>
+  ggplot(aes(value, sg_total)) +
+  geom_point(aes(col = sg_metric), show.legend = F) +
+  geom_line(stat = "smooth", formula = y ~ x, method = "lm", linetype = "dashed") +
+  facet_wrap(vars(sg_metric), scales = "free") +
+  scale_x_continuous(breaks = seq(-10, 10, by = 2)) +
+  scale_y_continuous(breaks = seq(-15, 15, by = 3)) +
+  labs(x = "Strokes Gained (X)", y = "Strokes Gained Total",
+       title = "Strokes Gained Metrics")
+```
+
+</details>
+
+![](README_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+
+**Plot Notes**: As expected, each of the individual strokes gained
+metrics have a positive correlation with total strokes gained. But which
+of them (other than tee to green, which is already a combination of more
+than one strokes gained metric) is most strongly correlation with total
+strokes gained?
+
+- Off the Tee: 0.400
+- Approach: 0.613
+- Around the Green: 0.492
+- *Tee to Green: 0.832*
+- Putting: 0.546
+
+XXX MORE INFO HERE
+
+------------------------------------------------------------------------
+
+### Strokes Gained Ranks?
+
+``` r
+df |>
+  select(player_name, contains("sg_")) |>
+  na.omit() |>
+  group_by(player_name) |>
+  summarise(putt = sum(sg_putt),
+            arg = sum(sg_arg),
+            app = sum(sg_app),
+            ott = sum(sg_ott),
+            t2g = sum(sg_t2g),
+            total = sum(sg_total)) |>
+  mutate(putt_rank = rank(-putt, ties.method = "min"),
+         arg_rank = rank(-arg, ties.method = "min"),
+         app_rank = rank(-app, ties.method = "min"),
+         ott_rank = rank(-ott, ties.method = "min"),
+         t2g_rank = rank(-t2g, ties.method = "min"),
+         total_rank = rank(-total, ties.method = "min"))
+```
+
+    ## # A tibble: 87 × 13
+    ##    player_name       putt    arg    app    ott    t2g   total putt_rank arg_rank
+    ##    <chr>            <dbl>  <dbl>  <dbl>  <dbl>  <dbl>   <dbl>     <int>    <int>
+    ##  1 " Abraham Ance…  1.44  -3.61   3.42   1.65   1.46   2.91          25       83
+    ##  2 " Adam Scott"    0.253 -1.97  -6.79   1.41  -7.35  -7.09          36       68
+    ##  3 " Bernd Wiesbe… -2.47   3.39  -1.93   0.917  2.38  -0.0910        73       12
+    ##  4 " Bernhard Lan…  0.189 -2.82   0.867 -2.38  -4.34  -4.15          37       75
+    ##  5 " Billy Horsch…  2.70  -1.54  -6.65   1.40  -6.79  -4.09          17       60
+    ##  6 " Brendon Todd" -0.453  0.977  1.94  -3.56  -0.638 -1.09          42       27
+    ##  7 " Brian Gay"    -0.62   1.03  -1.77  -3.79  -4.53  -5.15          46       25
+    ##  8 " Brian Harman"  3.02  -0.912  2.41   1.39   2.88   5.91          16       53
+    ##  9 " Brooks Koepk… -1.74  -0.17  -1.66   1.43  -0.407 -2.15          61       46
+    ## 10 " Bryson DeCha… -0.953 -3.22  -0.638  3.72  -0.140 -1.09          52       78
+    ## # ℹ 77 more rows
+    ## # ℹ 4 more variables: app_rank <int>, ott_rank <int>, t2g_rank <int>,
+    ## #   total_rank <int>
